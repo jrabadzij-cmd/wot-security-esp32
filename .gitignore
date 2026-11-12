@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+config.py
+secrets.h
+*.key
+*.pem
+*.crt
+.env

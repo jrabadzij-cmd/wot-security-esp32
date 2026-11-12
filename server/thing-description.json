@@ -1,0 +1,31 @@
+{
+  "@context": "https://www.w3.org/2022/wot/td/v1.1",
+  "id": "urn:dev:esp32-tmp36-001",
+  "title": "ESP32 Temperature Sensor",
+  "description": "ESP32 uređaj s TMP36 senzorom temperature, dio WoT sigurnosnog demo sustava",
+  "securityDefinitions": {
+    "nosec_sc": {
+      "scheme": "nosec"
+    }
+  },
+  "security": [
+    "nosec_sc"
+  ],
+  "properties": {
+    "temperature": {
+      "type": "number",
+      "unit": "celsius",
+      "description": "Trenutna temperatura izmjerena TMP36 senzorom",
+      "readOnly": true,
+      "forms": [
+        {
+          "href": "http://ESP32_IP_ADRESA/temperature",
+          "contentType": "application/json",
+          "op": [
+            "readproperty"
+          ]
+        }
+      ]
+    }
+  }
+}

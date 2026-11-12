@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="hr">
+
+<head>
+  <meta charset="UTF-8">
+  <title>WoT Sigurnosni Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #1a1a2e;
+      color: #eee;
+      margin: 0;
+      padding: 20px;
+    }
+
+    h1 {
+      text-align: center;
+      color: #4fc3f7;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .card {
+      background-color: #16213e;
+      border-radius: 10px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+
+    .temp-display {
+      font-size: 48px;
+      text-align: center;
+      color: #00e676;
+      margin: 10px 0;
+    }
+
+    .status {
+      text-align: center;
+      font-size: 14px;
+      color: #aaa;
+    }
+
+    .protections {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .protection-item {
+      background-color: #0f3460;
+      padding: 15px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .toggle-btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .toggle-btn.on {
+      background-color: #00e676;
+      color: #000;
+    }
+
+    .toggle-btn.off {
+      background-color: #ff5252;
+      color: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 8px;
+      text-align: left;
+      border-bottom: 1px solid #333;
+    }
+
+    th {
+      color: #4fc3f7;
+    }
+
+    .attack-blocked {
+      color: #00e676;
+    }
+
+    .attack-success {
+      color: #ff5252;
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="container">
+    <h1>WoT Sigurnosni Dashboard</h1>
+
+    <div class="card">
+      <h2>Trenutna temperatura</h2>
+      <div class="temp-display" id="tempValue">-- °C</div>
+      <div class="status" id="lastUpdate">Čekam podatke...</div>
+    </div>
+
+    <div class="card">
+      <h2>Mehanizmi zaštite</h2>
+      <div class="protections">
+        <div class="protection-item">
+          <span>TLS/HTTPS</span>
+          <button class="toggle-btn off" id="btn-tls" onclick="toggleProtection('tls')">ISKLJUČENO</button>
+        </div>
+        <div class="protection-item">
+          <span>Bearer Token</span>
+          <button class="toggle-btn off" id="btn-auth" onclick="toggleProtection('auth')">ISKLJUČENO</button>
+        </div>
+        <div class="protection-item">
+          <span>Nonce (Replay)</span>
+          <button class="toggle-btn off" id="btn-nonce" onclick="toggleProtection('nonce')">ISKLJUČENO</button>
+        </div>
+        <div class="protection-item">
+          <span>Rate Limiting</span>
+          <button class="toggle-btn off" id="btn-ratelimit" onclick="toggleProtection('ratelimit')">ISKLJUČENO</button>
+        </div>
+      </div>
+      <p style="font-size: 12px; color: #888; margin-top: 10px;">
+        Napomena: TLS/HTTPS zaštita ostvarena je zasebnim proxy poslužiteljem (arhitekturno rješenje), pa se gumb
+        prikazuje informativno. Preostale tri zaštite (Bearer Token, Nonce, Rate Limiting) izravno mijenjaju
+        konfiguraciju ESP32 uređaja.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>Log napada</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Vrijeme</th>
+            <th>Tip napada</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="attackLog">
+          <tr>
+            <td colspan="3" style="text-align:center; color:#666;">Nema zabilježenih napada</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const ESP32_BASE = "http://ESP32_IP_ADRESA";
+    const ESP32_URL = ESP32_BASE + "/temperature";
+
+    let tlsState = false;
+
+    function toggleTls() {
+      tlsState = !tlsState;
+      const btn = document.getElementById('btn-tls');
+      btn.textContent = tlsState ? "UKLJUČENO" : "ISKLJUČENO";
+      btn.className = "toggle-btn " + (tlsState ? "on" : "off");
+    }
+
+
+    async function toggleProtection(name) {
+      if (name === 'tls') {
+        toggleTls();
+        return;
+      }
+
+      const btn = document.getElementById('btn-' + name);
+      const currentlyOn = btn.classList.contains('on');
+      const newState = !currentlyOn;
+
+      try {
+        const response = await fetch(`${ESP32_BASE}/toggle?protection=${name}&state=${newState}`);
+        const data = await response.json();
+
+        if (data.status === "ok") {
+          btn.textContent = newState ? "UKLJUČENO" : "ISKLJUČENO";
+          btn.className = "toggle-btn " + (newState ? "on" : "off");
+        }
+      } catch (error) {
+        alert("Greška: uređaj nije dostupan za promjenu postavke.");
+        console.error(error);
+      }
+    }
+
+
+    async function fetchProtectionStatus() {
+      try {
+        const response = await fetch(`${ESP32_BASE}/status`);
+        const status = await response.json();
+
+        updateButton('btn-auth', status.auth);
+        updateButton('btn-nonce', status.nonce);
+        updateButton('btn-ratelimit', status.ratelimit);
+      } catch (error) {
+        console.error("Ne mogu dohvatiti status zaštita:", error);
+      }
+    }
+
+    function updateButton(id, state) {
+      const btn = document.getElementById(id);
+      btn.textContent = state ? "UKLJUČENO" : "ISKLJUČENO";
+      btn.className = "toggle-btn " + (state ? "on" : "off");
+    }
+
+    async function fetchTemperature() {
+      try {
+        const response = await fetch(ESP32_URL);
+        const data = await response.json();
+        document.getElementById('tempValue').textContent = data.temperature.toFixed(2) + " °C";
+        document.getElementById('lastUpdate').textContent = "Zadnje ažuriranje: " + new Date().toLocaleTimeString();
+      } catch (error) {
+        document.getElementById('lastUpdate').textContent = "Greška: uređaj nedostupan";
+      }
+    }
+
+    async function fetchAttackLog() {
+      try {
+        const response = await fetch('/attack-log');
+        const logs = await response.json();
+        const tbody = document.getElementById('attackLog');
+
+        if (logs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="3" style="text-align:center; color:#666;">Nema zabilježenih napada</td></tr>';
+          return;
+        }
+
+        tbody.innerHTML = "";
+        logs.forEach(entry => {
+          const row = document.createElement('tr');
+          const statusClass = entry.blocked ? "attack-blocked" : "attack-success";
+          const statusText = entry.blocked ? " Blokiran" : " Uspio";
+          row.innerHTML = `<td>${entry.time}</td><td>${entry.type}</td><td class="${statusClass}">${statusText}</td>`;
+          tbody.appendChild(row);
+        });
+      } catch (error) {
+        console.error("Greška pri dohvaćanju loga napada:", error);
+      }
+    }
+
+    fetchTemperature();
+    fetchAttackLog();
+    fetchProtectionStatus();
+    setInterval(fetchTemperature, 3000);
+    setInterval(fetchAttackLog, 2000);
+  </script>
+
+</body>
+
+</html>
